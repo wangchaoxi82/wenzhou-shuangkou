@@ -196,18 +196,23 @@
   }
 
   function updateVoiceButtons() {
-    var label = voiceMode === 'off' ? '🎤 语音：关' : voiceMode === 'on' ? '🎤 语音：开' : '🎤 语音：静音';
-    var short = voiceMode === 'off' ? '🎤 关' : voiceMode === 'on' ? '🎤 开' : '🎤 静音';
+    var label = voiceMode === 'off' ? '🎤 语音：关' : voiceMode === 'on' ? '🎤 语音：开' : '🎤 语音：开（已静音）';
+    var short = voiceMode === 'off' ? '🎤 关' : '🎤 开';
     $('voiceBtn1').textContent = label;
     $('voiceBtn2').textContent = short;
-    $('voiceBtn1').classList.toggle('on', voiceMode === 'on');
+    $('voiceBtn1').classList.toggle('on', voiceMode !== 'off');
     $('voiceBtn1').classList.toggle('muted', voiceMode === 'muted');
-    $('voiceBtn2').classList.toggle('on', voiceMode === 'on');
+    $('voiceBtn2').classList.toggle('on', voiceMode !== 'off');
     $('voiceBtn2').classList.toggle('muted', voiceMode === 'muted');
-    $('voiceOffBtn').classList.toggle('hidden', voiceMode === 'off');
+    // 静音按钮只在语音开启时显示
+    var muteHidden = voiceMode === 'off';
+    $('muteBtn1').classList.toggle('hidden', muteHidden);
+    $('muteBtn2').classList.toggle('hidden', muteHidden);
+    $('muteBtn1').textContent = voiceMode === 'muted' ? '🎙️ 取消静音' : '🔇 静音';
+    $('muteBtn2').textContent = voiceMode === 'muted' ? '🎙️' : '🔇';
   }
 
-  // 语音开关：关 → 开（请求麦克风）→ 点一下静音 → 再点取消静音；✕ 按钮彻底关闭
+  // 语音开关：关 ↔ 开（点一下开，再点一下彻底关）；静音是单独的按钮
   function toggleVoice() {
     if (voiceMode === 'off') {
       if (!window.VoiceChat || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -232,15 +237,22 @@
       }).catch(function () {
         toast('麦克风权限被拒绝，语音未开启');
       });
-    } else if (voiceMode === 'on') {
+    } else {
+      turnVoiceOff();
+    }
+  }
+
+  // 静音：只关自己的麦（别人听不到你，你还能听到别人），不断连接；再点取消静音
+  function toggleMute() {
+    if (voiceMode === 'off' || !voice) return;
+    if (voiceMode === 'on') {
       voice.setMuted(true);
       voiceMode = 'muted';
-      updateVoiceButtons();
     } else {
       voice.setMuted(false);
       voiceMode = 'on';
-      updateVoiceButtons();
     }
+    updateVoiceButtons();
   }
 
   function turnVoiceOff() {
@@ -623,7 +635,8 @@
   // 语音
   $('voiceBtn1').onclick = toggleVoice;
   $('voiceBtn2').onclick = toggleVoice;
-  $('voiceOffBtn').onclick = turnVoiceOff;
+  $('muteBtn1').onclick = toggleMute;
+  $('muteBtn2').onclick = toggleMute;
 
   $('playBtn').onclick = function () {
     if (!state || selected.size === 0) { toast('先选牌'); return; }
