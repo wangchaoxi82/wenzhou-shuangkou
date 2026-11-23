@@ -43,6 +43,9 @@
 
   // ---------- DOM ----------
   var $ = function (id) { return document.getElementById(id); };
+  // 安全绑定：元素不存在时跳过，不抛错。教训（2026-11-23）：CDN 缓存导致新 HTML + 旧 JS，
+  // 旧 JS 引用已删除的 voiceOffBtn 抛错，初始化中途夭折，WebSocket 从没连上，创建房间静默无反应。
+  function bind(id, fn) { var el = $(id); if (el) el.onclick = fn; }
   var landingEl = $('landing'), lobbyEl = $('lobby'), tableEl = $('table');
 
   function show(el) { [landingEl, lobbyEl, tableEl].forEach(function (s) { s.classList.toggle('hidden', s !== el); }); }
@@ -212,18 +215,20 @@
     // 语音按钮 = 我能不能说；静音按钮 = 我能不能听到别人
     var label = micOn && voiceStarted ? '🎤 语音：开' : '🎤 语音：关';
     var short = micOn && voiceStarted ? '🎤 开' : '🎤 关';
-    $('voiceBtn1').textContent = label;
-    $('voiceBtn2').textContent = short;
-    $('voiceBtn1').classList.toggle('on', micOn && voiceStarted);
-    $('voiceBtn2').classList.toggle('on', micOn && voiceStarted);
+    var b1 = $('voiceBtn1'), b2 = $('voiceBtn2'), m1 = $('muteBtn1'), m2 = $('muteBtn2');
+    if (b1) { b1.textContent = label; b1.classList.toggle('on', micOn && voiceStarted); }
+    if (b2) { b2.textContent = short; b2.classList.toggle('on', micOn && voiceStarted); }
     // 静音按钮只在语音会话开启时显示
-    var muteHidden = !voiceStarted;
-    $('muteBtn1').classList.toggle('hidden', muteHidden);
-    $('muteBtn2').classList.toggle('hidden', muteHidden);
-    $('muteBtn1').textContent = speakerOn ? '🔊 能听到' : '🔇 静音';
-    $('muteBtn2').textContent = speakerOn ? '🔊' : '🔇';
-    $('muteBtn1').classList.toggle('muted', !speakerOn);
-    $('muteBtn2').classList.toggle('muted', !speakerOn);
+    if (m1) {
+      m1.classList.toggle('hidden', !voiceStarted);
+      m1.textContent = speakerOn ? '🔊 能听到' : '🔇 静音';
+      m1.classList.toggle('muted', !speakerOn);
+    }
+    if (m2) {
+      m2.classList.toggle('hidden', !voiceStarted);
+      m2.textContent = speakerOn ? '🔊' : '🔇';
+      m2.classList.toggle('muted', !speakerOn);
+    }
   }
 
   // 语音按钮：控制我能不能说。第一次点开启会话（要麦克风权限），之后只开关自己的麦，不断连接
@@ -597,14 +602,14 @@
     $('landingErr').textContent = '';
     return name;
   }
-  $('createBtn').onclick = function () {
+  bind('createBtn', function () {
     var name = checkName();
     if (!name) return;
     myName = name;
     saveName(name);
     send({ t: 'create', name: name });
-  };
-  $('joinBtn').onclick = function () {
+  });
+  bind('joinBtn', function () {
     var name = checkName();
     if (!name) return;
     var code = $('codeInput').value.trim().toUpperCase();
@@ -612,11 +617,11 @@
     myName = name; myCode = code;
     saveName(name);
     send({ t: 'join', code: code, name: name });
-  };
-  $('readyBtn').onclick = function () { send({ t: 'ready' }); };
-  $('leaveBtn1').onclick = leaveRoom;
-  $('copyLinkBtn').onclick = copyInviteLink;
-  $('copyLinkBtn2').onclick = copyInviteLink;
+  });
+  bind('readyBtn', function () { send({ t: 'ready' }); });
+  bind('leaveBtn1', leaveRoom);
+  bind('copyLinkBtn', copyInviteLink);
+  bind('copyLinkBtn2', copyInviteLink);
   function copyInviteLink() {
     var link = location.origin + location.pathname + '?room=' + state.code;
     function done() { toast('邀请链接已复制'); }
@@ -639,14 +644,14 @@
   }
 
   // 聊天
-  $('chatToggleBtn1').onclick = function () { setChatOpen(!chatOpen); };
-  $('chatToggleBtn2').onclick = function () { setChatOpen(!chatOpen); };
-  $('chatCloseBtn').onclick = function () { setChatOpen(false); };
-  $('chatSendBtn').onclick = function () {
+  bind('chatToggleBtn1', function () { setChatOpen(!chatOpen); });
+  bind('chatToggleBtn2', function () { setChatOpen(!chatOpen); });
+  bind('chatCloseBtn', function () { setChatOpen(false); });
+  bind('chatSendBtn', function () {
     sendChat($('chatInput').value);
     $('chatInput').value = '';
     $('chatInput').focus();
-  };
+  });
   $('chatInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
       sendChat($('chatInput').value);
@@ -658,12 +663,12 @@
   });
 
   // 语音
-  $('voiceBtn1').onclick = toggleVoice;
-  $('voiceBtn2').onclick = toggleVoice;
-  $('muteBtn1').onclick = toggleSpeaker;
-  $('muteBtn2').onclick = toggleSpeaker;
+  bind('voiceBtn1', toggleVoice);
+  bind('voiceBtn2', toggleVoice);
+  bind('muteBtn1', toggleSpeaker);
+  bind('muteBtn2', toggleSpeaker);
 
-  $('playBtn').onclick = function () {
+  bind('playBtn', function () {
     if (!state || selected.size === 0) { toast('先选牌'); return; }
     var ids = Array.from(selected);
     var combo = SK.detect(ids);
@@ -674,26 +679,26 @@
     }
     send({ t: 'play', cards: ids });
     selected.clear();
-  };
-  $('passBtn').onclick = function () { send({ t: 'pass' }); selected.clear(); };
-  $('hintBtn').onclick = function () {
+  });
+  bind('passBtn', function () { send({ t: 'pass' }); selected.clear(); });
+  bind('hintBtn', function () {
     if (!state) return;
     var cur = state.currentPlay ? SK.detect(state.currentPlay.cards) : null;
     var hint = SK.hintPlay(state.hand, cur);
     if (!hint) { toast(state.currentPlay ? '没有能压过的牌，点“不要”' : '没有可出的牌'); return; }
     selected = new Set(hint.cards);
     renderTable(state);
-  };
-  $('againBtn').onclick = function () { send({ t: 'again' }); };
+  });
+  bind('againBtn', function () { send({ t: 'again' }); });
 
   // 规则弹窗
   function openRules() { $('rulesModal').classList.remove('hidden'); }
   function closeRules() { $('rulesModal').classList.add('hidden'); }
-  $('rulesBtn1').onclick = openRules;
-  $('rulesBtn2').onclick = openRules;
-  $('rulesBtn3').onclick = openRules;
-  $('closeRulesBtn').onclick = closeRules;
-  $('rulesModal').onclick = function (e) { if (e.target === $('rulesModal')) closeRules(); };
+  bind('rulesBtn1', openRules);
+  bind('rulesBtn2', openRules);
+  bind('rulesBtn3', openRules);
+  bind('closeRulesBtn', closeRules);
+  bind('rulesModal', function (e) { if (e.target === $('rulesModal')) closeRules(); });
 
   // 链接带房间代码时预填
   (function () {

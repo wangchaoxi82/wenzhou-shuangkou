@@ -14,6 +14,12 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 无歧义字符
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 
+// 静态资源版本：Altare 前面的 Cloudflare 会把 .js/.css 缓存 4 小时（max-age=14400），
+// 部署后 index.html 是新的、app.js 还是旧的，新旧对不上页面直接报错（2026-11-23 实测：
+// 旧 app.js 引用了新 HTML 里已删除的 voiceOffBtn，初始化中途抛错，WebSocket 从没连上，
+// 创建房间点下去静默无反应）。每次启动（每次部署都会重启进程）换一个版本号，强制拉新文件。
+const ASSET_VERSION = Date.now().toString(36);
+
 // ---------------- 静态文件 + 健康检查 ----------------
 const server = http.createServer((req, res) => {
   try {
@@ -23,12 +29,22 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
       return;
     }
-    let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
+    const isIndex = url.pathname === '/' || url.pathname === '/index.html';
+    let filePath = path.join(PUBLIC_DIR, isIndex ? 'index.html' : url.pathname);
     if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); res.end(); return; }
     fs.readFile(filePath, (err, data) => {
       if (err) { res.writeHead(404); res.end('Not found'); return; }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
-      res.end(data);
+      const headers = { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' };
+      let body = data;
+      if (isIndex) {
+        // 首页每次重新下发，并给静态资源加版本号，绕过 CDN 的 4 小时缓存
+        headers['Cache-Control'] = 'no-cache';
+        body = Buffer.from(data.toString('utf8')
+          .replace(/(shared|voice|app)\.js/g, '$1.js?v=' + ASSET_VERSION)
+          .replace(/style\.css/g, 'style.css?v=' + ASSET_VERSION));
+      }
+      res.writeHead(200, headers);
+      res.end(body);
     });
   } catch (e) {
     res.writeHead(500); res.end('Server error');
