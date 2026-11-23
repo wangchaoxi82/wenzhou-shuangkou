@@ -113,9 +113,15 @@
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
 
+  // 昵称单独存一份（只在本机浏览器里，不上传服务器）：房间没了也不丢，下次打开自动填好
+  function saveName(name) {
+    try { localStorage.setItem('sk-name', name); } catch (e) {}
+  }
+
   // 会话存 localStorage（只在本机浏览器里，不上传服务器）：关掉浏览器再打开也能自动回房
   function saveSession() {
     try { localStorage.setItem('sk-session', JSON.stringify({ name: myName, code: myCode })); } catch (e) {}
+    if (myName) saveName(myName);
   }
 
   // ---------- 聊天 ----------
@@ -595,6 +601,7 @@
     var name = checkName();
     if (!name) return;
     myName = name;
+    saveName(name);
     send({ t: 'create', name: name });
   };
   $('joinBtn').onclick = function () {
@@ -603,6 +610,7 @@
     var code = $('codeInput').value.trim().toUpperCase();
     if (!code) { $('landingErr').textContent = '先填房间代码'; return; }
     myName = name; myCode = code;
+    saveName(name);
     send({ t: 'join', code: code, name: name });
   };
   $('readyBtn').onclick = function () { send({ t: 'ready' }); };
@@ -693,7 +701,11 @@
     if (m) $('codeInput').value = m[1].toUpperCase();
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem('sk-session') || 'null'); } catch (e) {}
-    if (saved && saved.name) $('nameInput').value = saved.name;
+    // 昵称优先用单独存的那份（房间解散也不会丢），没有才用会话里的
+    var savedName = null;
+    try { savedName = localStorage.getItem('sk-name'); } catch (e) {}
+    if (savedName) $('nameInput').value = savedName;
+    else if (saved && saved.name) $('nameInput').value = saved.name;
   })();
 
   connect();
