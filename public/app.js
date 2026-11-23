@@ -64,7 +64,7 @@
       $('connState').classList.add('hidden');
       // 断线重连：自动用存下的名字和房间代码重新加入
       var saved = null;
-      try { saved = JSON.parse(sessionStorage.getItem('sk-session') || 'null'); } catch (e) {}
+      try { saved = JSON.parse(localStorage.getItem('sk-session') || 'null'); } catch (e) {}
       if (saved && saved.name && saved.code) {
         myName = saved.name; myCode = saved.code;
         send({ t: 'join', code: saved.code, name: saved.name });
@@ -74,7 +74,11 @@
       var msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (msg.t === 'state') onState(msg);
-      else if (msg.t === 'error') { toast(msg.msg); $('landingErr').textContent = msg.msg; }
+      else if (msg.t === 'error') {
+        toast(msg.msg); $('landingErr').textContent = msg.msg;
+        // 还没进房就报错（比如自动重进时房间已解散/名字被占）→ 存下的会话已失效，清除掉，免得下次打开又自动撞一次
+        if (!state) { try { localStorage.removeItem('sk-session'); } catch (e) {} }
+      }
       else if (msg.t === 'chat') onChatMsg(msg);
       else if (msg.t === 'voice-state') onVoiceState(msg);
       else if (msg.t === 'rtc-offer' && voice) voice.handleOffer(msg.from, msg.sdp).catch(function () {});
@@ -109,8 +113,9 @@
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
 
+  // 会话存 localStorage（只在本机浏览器里，不上传服务器）：关掉浏览器再打开也能自动回房
   function saveSession() {
-    try { sessionStorage.setItem('sk-session', JSON.stringify({ name: myName, code: myCode })); } catch (e) {}
+    try { localStorage.setItem('sk-session', JSON.stringify({ name: myName, code: myCode })); } catch (e) {}
   }
 
   // ---------- 聊天 ----------
@@ -602,13 +607,15 @@
   };
   $('readyBtn').onclick = function () { send({ t: 'ready' }); };
   $('leaveBtn1').onclick = leaveRoom;
-  $('copyLinkBtn').onclick = function () {
+  $('copyLinkBtn').onclick = copyInviteLink;
+  $('copyLinkBtn2').onclick = copyInviteLink;
+  function copyInviteLink() {
     var link = location.origin + location.pathname + '?room=' + state.code;
     function done() { toast('邀请链接已复制'); }
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(link).then(done, function () { fallbackCopy(link); done(); });
     } else { fallbackCopy(link); done(); }
-  };
+  }
   function fallbackCopy(text) {
     var ta = document.createElement('textarea');
     ta.value = text; document.body.appendChild(ta);
@@ -619,7 +626,7 @@
     if (voiceStarted) turnVoiceOff();
     intentionalClose = true;
     send({ t: 'leave' });
-    try { sessionStorage.removeItem('sk-session'); } catch (e) {}
+    try { localStorage.removeItem('sk-session'); } catch (e) {}
     setTimeout(function () { location.href = location.pathname; }, 200);
   }
 
@@ -685,7 +692,7 @@
     var m = /[?&]room=([A-Za-z0-9]{4})/.exec(location.search);
     if (m) $('codeInput').value = m[1].toUpperCase();
     var saved = null;
-    try { saved = JSON.parse(sessionStorage.getItem('sk-session') || 'null'); } catch (e) {}
+    try { saved = JSON.parse(localStorage.getItem('sk-session') || 'null'); } catch (e) {}
     if (saved && saved.name) $('nameInput').value = saved.name;
   })();
 
