@@ -23,10 +23,15 @@ class MockPC {
     this.closed = false;
     this.onicecandidate = null;
     this.ontrack = null;
+    this.iceConnectionState = 'new';
+    this.connectionState = 'new';
+    this.oniceconnectionstatechange = null;
+    this.onconnectionstatechange = null;
+    this.offerOptions = [];
   }
   getSenders() { return this.tracks.map((tr) => ({ track: tr })); }
   addTrack(track) { this.tracks.push(track); }
-  createOffer() { return Promise.resolve({ type: 'offer', sdp: 'mock-offer' }); }
+  createOffer(options) { this.offerOptions.push(options || {}); return Promise.resolve({ type: 'offer', sdp: 'mock-offer' }); }
   createAnswer() { return Promise.resolve({ type: 'answer', sdp: 'mock-answer' }); }
   setLocalDescription(d) {
     this.localDescription = d;
@@ -58,6 +63,7 @@ function mockStream() {
 function makeVC(mySeat) {
   const sent = [];
   const pcs = [];
+  const states = [];
   const vc = new VoiceChat({
     mySeat,
     send: (m) => sent.push(m),
@@ -65,8 +71,9 @@ function makeVC(mySeat) {
     getUserMedia: () => Promise.resolve(mockStream()),
     onTrack: () => {},
     onPeerClosed: () => {},
+    onConnectionState: (seat, st) => states.push([seat, st]),
   });
-  return { vc, sent, pcs };
+  return { vc, sent, pcs, states };
 }
 
 (async () => {
@@ -123,6 +130,7 @@ function makeVC(mySeat) {
     const { vc, pcs } = makeVC(0);
     await vc.start();
     await vc.createOffer(1);
+    await vc.handleAnswer(1, { type: 'answer', sdp: 'remote-answer' });
     await vc.handleIce(1, { candidate: 'cand1' });
     assert.equal(pcs[0].candidates.length, 1);
     assert.equal(pcs[0].candidates[0].candidate, 'cand1');
@@ -197,12 +205,56 @@ function makeVC(mySeat) {
     assert.equal(sent.length, 1); // 只发过自己的 offer，没回 answer
   });
 
-  await t('ICE 服务器配置含 4 个 STUN + 1 个 TURN', () => {
+  await t('ICE 服务器配置含多个 STUN + TURN（含 TCP 与 TLS 变体）', () => {
     const ice = VoiceChat.DEFAULT_ICE;
-    assert.equal(ice.filter((s) => String(s.urls).startsWith('stun:')).length, 4);
-    const turn = ice.find((s) => String(s.urls).startsWith('turn:'));
-    assert.ok(turn);
-    assert.equal(turn.username, 'openrelayproject');
+    assert.ok(ice.filter((s) => String(s.urls).startsWith('stun:')).length >= 4);
+    const turns = ice.filter((s) => String(s.urls).startsWith('turn'));
+    assert.ok(turns.length >= 2);
+    assert.ok(turns.some((s) => String(s.urls).includes('transport=tcp')));
+    assert.ok(turns.some((s) => String(s.urls).startsWith('turns:')));
+    assert.ok(turns.every((s) => s.username === 'openrelayproject'));
+  });
+
+  await t('远端描述未就绪时 ICE 候选暂存，收到 answer 后补加', async () => {
+    const { vc, pcs } = makeVC(0);
+    await vc.start();
+    await vc.createOffer(1);
+    // 此时 remoteDescription 还是 null（answer 没到），候选应暂存而非直接加上
+    await vc.handleIce(1, { candidate: 'early-cand' });
+    assert.equal(pcs[0].candidates.length, 0);
+    await vc.handleAnswer(1, { type: 'answer', sdp: 'remote-answer' });
+    assert.equal(pcs[0].candidates.length, 1);
+    assert.equal(pcs[0].candidates[0].candidate, 'early-cand');
+  });
+
+  await t('ICE 连接失败时小座位号方发起一次 ICE 重启', async () => {
+    const { vc, sent, pcs, states } = makeVC(0);
+    await vc.start();
+    await vc.createOffer(1);
+    await vc.handleAnswer(1, { type: 'answer', sdp: 'remote-answer' });
+    const before = sent.length;
+    pcs[0].iceConnectionState = 'failed';
+    pcs[0].oniceconnectionstatechange();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(states[states.length - 1], [1, 'failed']);
+    assert.equal(sent.length, before + 1); // 多发了一个 offer
+    assert.equal(sent[sent.length - 1].t, 'rtc-offer');
+    assert.equal(pcs[0].offerOptions[pcs[0].offerOptions.length - 1].iceRestart, true);
+    // 再失败一次不再重启
+    pcs[0].oniceconnectionstatechange();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(sent.length, before + 1);
+  });
+
+  await t('ICE 连接失败时大座位号方不主动重启（等对方）', async () => {
+    const { vc, sent, pcs } = makeVC(2);
+    await vc.start();
+    await vc.handleOffer(1, { type: 'offer', sdp: 'from-1' });
+    const before = sent.length;
+    pcs[0].iceConnectionState = 'failed';
+    pcs[0].oniceconnectionstatechange();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(sent.length, before);
   });
 
   console.log(`\n全部通过：${passed} 个测试`);

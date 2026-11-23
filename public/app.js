@@ -23,6 +23,20 @@
   var voiceMode = 'off';
   var remoteMuted = new Set(); // 不想听的座位
   var audioEls = {}; // seat -> <audio>
+  var voiceStates = {}; // seat -> 'connecting' | 'connected' | 'disconnected' | 'failed'
+
+  // 手机浏览器常拦截非手势触发的音频播放：任何一次点击/触摸都尝试把已有的远端音频播起来
+  function unlockAudio() {
+    Object.keys(audioEls).forEach(function (seat) {
+      var audio = audioEls[seat];
+      if (audio && audio.paused && audio.srcObject) {
+        var p = audio.play();
+        if (p && p.catch) p.catch(function () {});
+      }
+    });
+  }
+  document.addEventListener('pointerdown', unlockAudio);
+  document.addEventListener('touchstart', unlockAudio);
 
   // ---------- DOM ----------
   var $ = function (id) { return document.getElementById(id); };
@@ -145,12 +159,21 @@
         }
         audio.srcObject = stream;
         audio.muted = remoteMuted.has(seat);
-        var p = audio.play();
-        if (p && p.catch) p.catch(function () { /* 需手势时由开关点击触发 */ });
+        unlockAudio();
+      },
+      onConnectionState: function (seat, st) {
+        voiceStates[seat] = st;
+        if (st === 'failed' && state && state.seats[seat]) {
+          toast('与' + state.seats[seat].name + '的语音没连上，可能是网络问题');
+        }
+        if (!state) return;
+        if (state.phase === 'playing') renderTable(state);
+        else if (state.phase === 'lobby') renderLobby(state);
       },
       onPeerClosed: function (seat) {
         var audio = audioEls[seat];
         if (audio) { audio.srcObject = null; audio.remove(); delete audioEls[seat]; }
+        delete voiceStates[seat];
       },
     });
     return voice;
@@ -180,10 +203,12 @@
       v.start().then(function () {
         voiceMode = 'on';
         updateVoiceButtons();
+        unlockAudio(); // 手势上下文里把已有远端音频播起来（手机自动播放限制）
         send({ t: 'voice', on: true });
         // 向已开语音且座位号比我大的玩家发起连接（小号发起，避免冲突）
         state.seats.forEach(function (p, i) {
           if (p.voice && i !== state.mySeat && state.mySeat < i) {
+            voiceStates[i] = 'connecting';
             v.createOffer(i).catch(function () {});
           }
         });
@@ -205,6 +230,7 @@
   function turnVoiceOff() {
     if (voice) voice.stop();
     voiceMode = 'off';
+    voiceStates = {};
     updateVoiceButtons();
     send({ t: 'voice', on: false });
   }
@@ -220,10 +246,21 @@
     }
     // 对方开了语音：我是小号且我也开着 → 我发起
     if (voiceMode !== 'off' && voice && state.mySeat < msg.seat) {
+      voiceStates[msg.seat] = 'connecting';
       voice.createOffer(msg.seat).catch(function () {});
     }
     if (state.phase === 'playing') renderTable(state);
     else if (state.phase === 'lobby') renderLobby(state);
+  }
+
+  // 语音连接状态点：🟡连接中 🟢已连接 🔴失败（自己或对方没开语音时不显示）
+  function voiceDot(seat) {
+    if (voiceMode === 'off' || seat === state.mySeat) return '';
+    var st = voiceStates[seat];
+    if (!st) return '';
+    if (st === 'connected') return ' <span class="vdot ok" title="语音已连接">🟢</span>';
+    if (st === 'failed') return ' <span class="vdot bad" title="语音没连上">🔴</span>';
+    return ' <span class="vdot" title="语音连接中">🟡</span>';
   }
 
   // ---------- 状态渲染 ----------
@@ -263,7 +300,7 @@
       var btn = '';
       if (!p.name && s.mySeat !== -1) btn = '<button class="btn small" data-seat="' + i + '">坐这儿</button>';
       d.innerHTML = '<div class="pos">' + seatPosLabel(i) + '</div>' +
-        '<div class="name">' + (p.name ? esc(p.name) : '空座位') + (p.voice ? ' <span class="voice-ico">🎤</span>' : '') + '</div>' +
+        '<div class="name">' + (p.name ? esc(p.name) : '空座位') + (p.voice ? ' <span class="voice-ico">🎤</span>' + voiceDot(i) : '') + '</div>' +
         '<div class="st' + (p.ready ? ' ready' : '') + '">' + (p.name ? (p.ready ? '✓ 已准备' : (p.connected ? '未准备' : '断线中…')) : '') + '</div>' + btn;
       seatsEl.appendChild(d);
     });
@@ -301,7 +338,7 @@
     // 语音标记 + 不听此人按钮（仅双方都开语音时有效）
     var voiceHtml = '';
     if (p.voice) {
-      voiceHtml = ' <span class="voice-ico">🎤</span>';
+      voiceHtml = ' <span class="voice-ico">🎤</span>' + voiceDot(seat);
       if (voiceMode !== 'off') {
         var muted = remoteMuted.has(seat);
         voiceHtml += '<button class="mute-btn' + (muted ? ' off' : '') + '" data-mute="' + seat + '">' + (muted ? '🔇' : '🔊') + '</button>';
