@@ -8,7 +8,7 @@ const { Game } = require('./game');
 const PORT = process.env.PORT || 3000;
 const TURN_SECONDS = 60; // 回合限时
 const DISCONNECTED_TURN_SECONDS = 5; // 断线玩家回合限时（快速自动处理）
-const SEAT_HOLD_MS = 5 * 60 * 1000; // 断线留座 5 分钟
+const SEAT_HOLD_MS = 15 * 60 * 1000; // 断线留座 15 分钟（手机切后台/接电话常见）
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 无歧义字符
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -242,7 +242,7 @@ function onDisconnect(room, seat) {
   p.connected = false;
   p.ws = null;
   if (p.voiceOn) { p.voiceOn = false; broadcastVoiceOff(room, seat); }
-  log(room, `座位 ${seat} 断线，留座 5 分钟`);
+  log(room, `座位 ${seat} 断线，留座 15 分钟`);
   cancelCountdown(room);
   // 若正轮到他，缩短回合计时
   if (room.game.phase === 'playing' && room.game.turn === seat) armTurnTimer(room);

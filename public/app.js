@@ -13,6 +13,7 @@
   var prevTurn = -1;
   var intentionalClose = false;
   var reconnectTimer = null;
+  var needVoiceHeal = false; // 断线后重连，需重新宣告语音并重建通话
 
   // 聊天
   var chatOpen = false;
@@ -78,14 +79,29 @@
       else if (msg.t === 'rtc-answer' && voice) voice.handleAnswer(msg.from, msg.sdp).catch(function () {});
       else if (msg.t === 'rtc-ice' && voice) voice.handleIce(msg.from, msg.candidate).catch(function () {});
     };
+    var selfWs = ws;
     ws.onclose = function () {
       if (intentionalClose) return;
+      if (ws !== selfWs) return; // 已被新连接取代，不再重连
+      needVoiceHeal = true;
       $('connState').classList.remove('hidden');
       clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(connect, 2000);
     };
     ws.onerror = function () { try { ws.close(); } catch (e) {} };
   }
+
+  // 切回前台时立即重连（后台定时器会被手机系统节流，不能只靠 2 秒定时器）
+  function reconnectNow() {
+    if (intentionalClose) return;
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+    clearTimeout(reconnectTimer);
+    connect();
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) reconnectNow();
+  });
+  window.addEventListener('pageshow', function () { reconnectNow(); });
 
   function send(obj) {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
@@ -231,6 +247,7 @@
     if (voice) voice.stop();
     voiceMode = 'off';
     voiceStates = {};
+    needVoiceHeal = false;
     updateVoiceButtons();
     send({ t: 'voice', on: false });
   }
@@ -280,6 +297,21 @@
     myCode = s.code;
     if (voice) voice.mySeat = s.mySeat;
     saveSession();
+
+    // 断线重连后语音自愈：服务器端已把我的语音标为关闭，但本地还开着 → 重新宣告并重建通话
+    var mySeatState = s.seats[s.mySeat];
+    if (needVoiceHeal && voiceMode !== 'off' && voice && mySeatState && !mySeatState.voice) {
+      needVoiceHeal = false;
+      voice.closeAll();
+      voiceStates = {};
+      send({ t: 'voice', on: true });
+      s.seats.forEach(function (p, i) {
+        if (p.voice && i !== s.mySeat && s.mySeat < i) {
+          voiceStates[i] = 'connecting';
+          voice.createOffer(i).catch(function () {});
+        }
+      });
+    }
 
     if (s.phase === 'lobby') { show(lobbyEl); renderLobby(s); }
     else { show(tableEl); renderTable(s); }
@@ -516,6 +548,11 @@
       el.classList.toggle('low', left <= 10);
     });
   }, 250);
+
+  // 心跳：25 秒 ping 一次，保活连接（部分路由器/代理会掐闲置连接）
+  setInterval(function () {
+    if (ws && ws.readyState === WebSocket.OPEN) send({ t: 'ping' });
+  }, 25000);
 
   // ---------- 事件 ----------
   function checkName() {
