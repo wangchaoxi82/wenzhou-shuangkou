@@ -55,7 +55,7 @@ function createRoom() {
     players: [null, null, null, null], // {name, ws, connected, ready, voiceOn}
     game: new Game(),
     again: new Set(), // 已点“再来一局”的座位
-    chatLog: [], // {seat, name, text, time}，最多保留 50 条
+    // 注意：聊天不保存——消息只实时广播，不存历史；昵称只存在内存房间状态里，房间解散即消失；日志不写昵称
     startingTimeout: null,
     startingAt: 0, // 倒计时开始时间戳（0 表示未倒计时）
     turnTimeout: null,
@@ -213,7 +213,7 @@ function startHand(room) {
 function removePlayer(room, seat, reason) {
   const p = room.players[seat];
   if (!p) return;
-  log(room, `${p.name}（座位 ${seat}）离开：${reason}`);
+  log(room, `座位 ${seat} 离开：${reason}`);
   if (p.voiceOn) broadcastVoiceOff(room, seat);
   room.players[seat] = null;
   room.again.delete(seat);
@@ -242,7 +242,7 @@ function onDisconnect(room, seat) {
   p.connected = false;
   p.ws = null;
   if (p.voiceOn) { p.voiceOn = false; broadcastVoiceOff(room, seat); }
-  log(room, `${p.name}（座位 ${seat}）断线，留座 5 分钟`);
+  log(room, `座位 ${seat} 断线，留座 5 分钟`);
   cancelCountdown(room);
   // 若正轮到他，缩短回合计时
   if (room.game.phase === 'playing' && room.game.turn === seat) armTurnTimer(room);
@@ -276,7 +276,7 @@ function handleMessage(ws, msg) {
         const room = createRoom();
         room.players[0] = { name: name, ws: ws, connected: true, ready: false, voiceOn: false };
         ws._room = room; ws._seat = 0;
-        log(room, `${name} 创建房间，坐 0 号位`);
+        log(room, `座位 0 创建房间`);
         ws.send(JSON.stringify(stateFor(room, 0)));
         break;
       }
@@ -294,10 +294,9 @@ function handleMessage(ws, msg) {
           const timer = room.removeTimers.get(oldSeat);
           if (timer) { clearTimeout(timer); room.removeTimers.delete(oldSeat); }
           ws._room = room; ws._seat = oldSeat;
-          log(room, `${name} 断线重连，回到座位 ${oldSeat}`);
+          log(room, `座位 ${oldSeat} 断线重连`);
           if (room.game.phase === 'playing' && room.game.turn === oldSeat) armTurnTimer(room);
           maybeStartCountdown(room);
-          ws.send(JSON.stringify({ t: 'chat-history', messages: room.chatLog }));
           broadcast(room);
           return;
         }
@@ -307,8 +306,7 @@ function handleMessage(ws, msg) {
         if (room.game.phase !== 'lobby') { sendError(ws, '游戏进行中，不能加入'); return; }
         room.players[seat] = { name: name, ws: ws, connected: true, ready: false, voiceOn: false };
         ws._room = room; ws._seat = seat;
-        log(room, `${name} 加入，坐 ${seat} 号位`);
-        ws.send(JSON.stringify({ t: 'chat-history', messages: room.chatLog }));
+        log(room, `座位 ${seat} 加入`);
         broadcast(room);
         break;
       }
@@ -320,8 +318,7 @@ function handleMessage(ws, msg) {
         const text = typeof data.text === 'string' ? data.text.trim() : '';
         if (!text || text.length > 200) return;
         const entry = { seat: ws._seat, name: p.name, text: text, time: Date.now() };
-        room.chatLog.push(entry);
-        if (room.chatLog.length > 50) room.chatLog.shift();
+        // 只实时广播，不保存
         broadcastMsg(room, Object.assign({ t: 'chat' }, entry));
         break;
       }

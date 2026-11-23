@@ -59,7 +59,6 @@
       if (msg.t === 'state') onState(msg);
       else if (msg.t === 'error') { toast(msg.msg); $('landingErr').textContent = msg.msg; }
       else if (msg.t === 'chat') onChatMsg(msg);
-      else if (msg.t === 'chat-history') (msg.messages || []).forEach(onChatMsg);
       else if (msg.t === 'voice-state') onVoiceState(msg);
       else if (msg.t === 'rtc-offer' && voice) voice.handleOffer(msg.from, msg.sdp).catch(function () {});
       else if (msg.t === 'rtc-answer' && voice) voice.handleAnswer(msg.from, msg.sdp).catch(function () {});
