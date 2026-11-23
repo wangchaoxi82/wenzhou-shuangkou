@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>温州双扣</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== 首页 ===== -->
+  <section id="landing" class="screen">
+    <h1>🃏 温州双扣</h1>
+    <p class="sub">百变双扣 · 四人联机 · 自动计分</p>
+    <div class="card-box">
+      <label>你的昵称（必填，2–8 个字，房间内不能重名）</label>
+      <input id="nameInput" type="text" maxlength="8" placeholder="2–8 个字" autocomplete="off">
+      <button id="createBtn" class="btn primary big">创建房间</button>
+      <div class="divider">或者</div>
+      <label>房间代码</label>
+      <input id="codeInput" type="text" maxlength="4" placeholder="4 位代码" autocomplete="off" style="text-transform:uppercase">
+      <button id="joinBtn" class="btn big">加入房间</button>
+    </div>
+    <button id="rulesBtn1" class="btn link">玩法规则</button>
+    <p id="landingErr" class="err"></p>
+  </section>
+
+  <!-- ===== 大厅 ===== -->
+  <section id="lobby" class="screen hidden">
+    <div class="topbar">
+      <span>房间 <b id="roomCode"></b></span>
+      <span class="topbtns">
+        <button id="chatToggleBtn1" class="btn small">💬 聊天<span id="chatBadge1" class="badge hidden"></span></button>
+        <button id="voiceBtn1" class="btn small">🎤 语音：关</button>
+        <button id="copyLinkBtn" class="btn small">复制邀请链接</button>
+      </span>
+    </div>
+    <div id="seats" class="seats"></div>
+    <p id="lobbyHint" class="hint">坐满 4 人且都点准备后开始</p>
+    <div class="row">
+      <button id="readyBtn" class="btn primary big">准备</button>
+    </div>
+    <div class="row">
+      <button id="rulesBtn2" class="btn">玩法规则</button>
+      <button id="leaveBtn1" class="btn danger">离开房间</button>
+    </div>
+  </section>
+
+  <!-- ===== 牌桌 ===== -->
+  <section id="table" class="screen hidden">
+    <div class="topbar">
+      <span>房间 <b id="roomCode2"></b> · 第 <b id="handNo"></b> 局</span>
+      <span class="topbtns">
+        <button id="chatToggleBtn2" class="btn small">💬<span id="chatBadge2" class="badge hidden"></span></button>
+        <button id="voiceBtn2" class="btn small">🎤 关</button>
+        <button id="voiceOffBtn" class="btn small danger hidden">✕ 语音</button>
+        <button id="rulesBtn3" class="btn small">规则</button>
+      </span>
+    </div>
+
+    <div id="opponents">
+      <div id="oppTop" class="opp top"></div>
+      <div class="opp-row">
+        <div id="oppLeft" class="opp left"></div>
+        <div id="center">
+          <div id="lastPlay"></div>
+          <div id="centerHint"></div>
+        </div>
+        <div id="oppRight" class="opp right"></div>
+      </div>
+    </div>
+
+    <div id="scoreBar"></div>
+
+    <div id="myArea">
+      <div id="myInfo"></div>
+      <div id="myHand" class="hand"></div>
+      <div id="actions">
+        <button id="hintBtn" class="btn">提示</button>
+        <button id="passBtn" class="btn">不要</button>
+        <button id="playBtn" class="btn primary">出牌</button>
+      </div>
+      <p id="playHint" class="hint"></p>
+    </div>
+  </section>
+
+  <!-- ===== 结算弹窗 ===== -->
+  <div id="resultModal" class="modal hidden">
+    <div class="modal-box">
+      <h2 id="resultTitle"></h2>
+      <div id="resultBody"></div>
+      <button id="againBtn" class="btn primary big">再来一局</button>
+      <p id="againHint" class="hint"></p>
+    </div>
+  </div>
+
+  <!-- ===== 规则弹窗 ===== -->
+  <div id="rulesModal" class="modal hidden">
+    <div class="modal-box rules">
+      <h2>玩法规则（温州百变双扣）</h2>
+      <div class="rules-body">
+        <h3>基本</h3>
+        <p>两副牌共 108 张，4 人各 27 张。对家（对面）是队友。牌力从小到大：3、4、5、6、7、8、9、10、J、Q、K、A、2、小王、大王。</p>
+        <h3>百变（万能牌）</h3>
+        <p>大王（红司令）是万能牌，可当任意牌用；小王（白司令）不能变。在顺子、连对、连三张、连炸里，大王只能补 3～A 的点（不能补 2）；在对子、三张、炸弹里可以补任意点（含 2 和小王）。三王、天王炸弹必须是实打实的司令，不能用大王凑。</p>
+        <h3>牌型</h3>
+        <p>单张、对子、三张；顺子（5 张以上连续，3～A，不含 2）；连对（3 对以上连续，3～A）；连三张（3 组以上连续的三张，3～A）；炸弹（4 张以上同点，2 也可以作炸弹）；连炸（见下）；三王炸弹（任意 3 张司令）；天王炸弹（4 张司令）。</p>
+        <h3>连炸（本地规则）</h3>
+        <p>最少 3 组起步，每组张数必须相同（4 条连炸、5 条连炸、6 条连炸都可以）；组与组之间牌面要像顺子一样连着（3～A，2 不能进）。例如 3333+4444+5555 是连炸；3333+4444 只有 2 组不算；55555+4444+3333 混搭张数不算；AAAA+2222+3333 含 2 不算。</p>
+        <h3>炸弹比大小：线</h3>
+        <p>每个炸弹都有“线”数：X 张炸 = X 线；连炸 = 组数 + 组大小（3 连 4 条 = 7 线，4 连 4 条 = 8 线）；三王炸弹 = 6 线；天王炸弹 = 7 线。先比线，线高者大；线相同比张数，张数多的赢；线和张数都相同比最大点数。8 线及以上的炸弹（8 张炸、4 连 4 条等）比天王炸弹大。任何炸弹都能压非炸弹牌型。</p>
+        <h3>出牌与接风</h3>
+        <p>首攻可出任意合法牌型；跟牌必须出同型且更大的牌，或用炸弹压过，或过牌。一圈人都过后，由最后出牌的人重新领出。如果出牌的人已经出完手牌且无人压过，由他的队友接风领出。每回合限时 60 秒，超时首攻自动出最小单张，跟牌自动过。</p>
+        <h3>计分（每人）</h3>
+        <p>双扣（前两名是同队）：赢队 +3，输队 −3；单扣（第一名队友第三）：赢队 +2，输队 −2；平扣（第一名队友第四）：赢队 +1，输队 −1。前两名同队时立即结束本局，无需分第三、四名。本版暂不计炸弹翻倍/贡献分。</p>
+        <h3>下一局领出</h3>
+        <p>第一局随机一人领出；上一局单扣或平扣由上一局第一名领出；上一局双扣则随机一人领出。</p>
+      </div>
+      <button id="closeRulesBtn" class="btn primary big">知道了</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <div id="connState" class="conn hidden">连接断开，正在重连…</div>
+  <div id="audioBox" class="hidden"></div>
+
+  <!-- ===== 聊天面板（可收起，默认收起不挡牌） ===== -->
+  <div id="chatPanel" class="chat-panel hidden">
+    <div class="chat-head">
+      <span>房间聊天</span>
+      <button id="chatCloseBtn" class="btn small">收起</button>
+    </div>
+    <div id="chatMessages" class="chat-messages"><div class="chat-empty">还没有消息，打个招呼吧</div></div>
+    <div id="quickPhrases" class="quick-phrases">
+      <button data-phrase="快点！">快点！</button>
+      <button data-phrase="不要">不要</button>
+      <button data-phrase="好牌！">好牌！</button>
+      <button data-phrase="对家接风">对家接风</button>
+    </div>
+    <div class="chat-input-row">
+      <input id="chatInput" type="text" maxlength="200" placeholder="说点什么…" autocomplete="off">
+      <button id="chatSendBtn" class="btn primary">发送</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script src="voice.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

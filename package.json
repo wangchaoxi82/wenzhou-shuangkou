@@ -1,0 +1,19 @@
+{
+  "name": "shuangkou",
+  "version": "1.0.0",
+  "description": "温州百变双扣四人联机网页游戏",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/logic.test.js && node test/voice.test.js && node test/simulate.js 200 && node test/server.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.23.0"
+  }
+}

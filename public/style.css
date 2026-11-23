@@ -1,0 +1,226 @@
+/* 温州双扣 — 手机优先样式：竖屏手机为主，兼顾横屏与桌面 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; height: 100%; overflow-x: hidden; }
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #0d5c36;
+  color: #fff;
+  touch-action: manipulation;
+}
+button, .card { touch-action: manipulation; }
+.hidden { display: none !important; }
+
+:root {
+  /* 牌面大小随屏宽缩放（手机竖屏约 36–44px，桌面最大 54px） */
+  --card-w: clamp(34px, 10.5vw, 54px);
+  --card-overlap: calc(var(--card-w) * -0.48);
+}
+
+.screen { max-width: 640px; margin: 0 auto; padding: 12px; min-height: 100vh; }
+#table.screen { max-width: 900px; }
+h1 { text-align: center; font-size: clamp(26px, 8vw, 34px); margin: 28px 0 4px; }
+.sub { text-align: center; color: #bfe8cd; margin: 0 0 24px; }
+
+.card-box { background: rgba(255,255,255,.08); border-radius: 12px; padding: 20px; }
+label { display: block; font-size: 14px; color: #bfe8cd; margin: 8px 0 4px; }
+input {
+  width: 100%; padding: 12px; font-size: 17px; border: none; border-radius: 8px;
+  background: #fff; color: #222; margin-bottom: 8px; outline: none; min-height: 46px;
+}
+.btn {
+  border: none; border-radius: 8px; padding: 11px 14px; font-size: 16px;
+  background: #e8e8e8; color: #222; cursor: pointer; min-height: 44px; min-width: 44px;
+}
+.btn.primary { background: #f5a623; color: #222; font-weight: bold; }
+.btn.danger { background: #c0392b; color: #fff; }
+.btn.small { padding: 8px 10px; font-size: 14px; min-height: 38px; }
+.btn.big { width: 100%; margin: 8px 0; }
+.btn.link { background: none; color: #bfe8cd; text-decoration: underline; display: block; margin: 12px auto; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.on { background: #2ecc71; color: #fff; }
+.btn.muted { background: #e67e22; color: #fff; }
+.divider { text-align: center; color: #bfe8cd; margin: 12px 0; font-size: 14px; }
+.err { color: #ff9d9d; text-align: center; min-height: 20px; }
+.hint { color: #bfe8cd; text-align: center; font-size: 14px; min-height: 20px; }
+.row { display: flex; gap: 10px; margin: 8px 0; }
+.row .btn { flex: 1; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.topbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge {
+  display: inline-block; background: #e74c3c; color: #fff; border-radius: 10px;
+  font-size: 11px; min-width: 18px; height: 18px; line-height: 18px; text-align: center;
+  margin-left: 3px; vertical-align: middle;
+}
+
+/* 大厅座位 */
+.seats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+.seat {
+  background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.2);
+  border-radius: 12px; padding: 14px 8px; text-align: center; min-height: 92px;
+}
+.seat.me { border-color: #f5a623; }
+.seat .pos { font-size: 13px; color: #bfe8cd; }
+.seat .name { font-size: 19px; font-weight: bold; margin: 5px 0; min-height: 25px; word-break: break-all; }
+.seat .st { font-size: 14px; color: #ffd; }
+.seat .st.ready { color: #7dff9e; }
+.seat.empty .name { color: #8fc7a3; font-weight: normal; }
+.voice-ico { font-size: 13px; margin-left: 4px; }
+
+/* 牌桌 */
+#opponents { margin-bottom: 6px; }
+.opp {
+  background: rgba(0,0,0,.25); border-radius: 10px; padding: 6px 8px;
+  min-height: 58px; border: 2px solid transparent;
+}
+.opp.turn { border-color: #f5a623; box-shadow: 0 0 10px rgba(245,166,35,.6); }
+.opp.top { margin-bottom: 6px; text-align: center; }
+.opp-row { display: flex; gap: 6px; align-items: stretch; }
+.opp.left, .opp.right { flex: 1; min-width: 0; }
+#center {
+  flex: 1.3; text-align: center; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; min-height: 76px; min-width: 0;
+}
+.opp .nm { font-weight: bold; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opp .tag { font-size: 11px; background: #f5a623; color: #222; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+.opp .tag.foe { background: #888; color: #fff; }
+.opp .meta { font-size: 13px; color: #bfe8cd; margin-top: 1px; }
+.opp .played { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
+.opp .pass { color: #ff9d9d; font-weight: bold; margin-top: 3px; font-size: 14px; }
+.opp.out { opacity: .55; }
+.mute-btn {
+  background: rgba(255,255,255,.15); border: none; border-radius: 6px; color: #fff;
+  font-size: 13px; padding: 4px 7px; margin-left: 5px; cursor: pointer; min-height: 28px; min-width: 30px;
+}
+.mute-btn.off { background: #c0392b; }
+.timer { font-size: 19px; font-weight: bold; color: #f5a623; }
+.timer.low { color: #ff6b6b; }
+
+#scoreBar {
+  display: flex; justify-content: space-between; gap: 4px; background: rgba(0,0,0,.25);
+  border-radius: 8px; padding: 6px 10px; font-size: 13px; margin-bottom: 6px; overflow-x: auto;
+}
+#scoreBar .me { color: #f5a623; font-weight: bold; }
+
+#myInfo { text-align: center; font-size: 14px; margin-bottom: 2px; min-height: 22px; }
+#myInfo .turn-me { color: #f5a623; font-weight: bold; }
+
+/* 手牌：重叠扇形排列（旋转由 JS 按行计算，选中上浮） */
+.hand {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  padding: 10px 2px 4px; min-height: 88px; align-items: flex-start;
+}
+.card {
+  width: var(--card-w); aspect-ratio: 5 / 7; background: #fff; color: #222;
+  border-radius: 6px; border: 1px solid #999;
+  margin: 2px 0 2px var(--card-overlap);
+  padding: 3px 2px; cursor: pointer; user-select: none; -webkit-user-select: none;
+  position: relative; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  transition: transform .12s; transform-origin: 50% 100%;
+}
+.hand .card:first-child { margin-left: 0; }
+.card .r { font-size: calc(var(--card-w) * 0.38); font-weight: bold; line-height: 1.15; }
+.card .s { font-size: calc(var(--card-w) * 0.32); line-height: 1; }
+.card.red { color: #d21f2b; }
+.card.joker .r { font-size: calc(var(--card-w) * 0.3); }
+.card.selected { outline: 3px solid #f5a623; z-index: 20 !important; }
+.card.small {
+  width: 28px; height: 40px; aspect-ratio: auto; padding: 2px 1px; margin: 1px; cursor: default;
+  transform: none !important;
+}
+.card.small .r { font-size: 12px; }
+.card.small .s { font-size: 11px; }
+.card.small.joker .r { font-size: 10px; }
+
+#actions { display: flex; gap: 10px; justify-content: center; margin: 8px 0 4px; }
+#actions .btn { flex: 1; max-width: 140px; font-size: 17px; min-height: 48px; }
+
+#lastPlay { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; min-height: 44px; }
+#lastPlay .desc { width: 100%; font-size: 13px; color: #ffe9a8; margin-bottom: 2px; }
+
+/* 聊天面板：手机底部抽屉，桌面右侧栏 */
+.chat-panel {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  background: #fff; color: #222; border-radius: 14px 14px 0 0;
+  display: flex; flex-direction: column; max-height: 46vh;
+  box-shadow: 0 -4px 20px rgba(0,0,0,.4);
+}
+.chat-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid #eee; font-weight: bold; }
+.chat-head .btn { background: #eee; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 10px 12px; min-height: 80px; }
+.chat-msg { margin-bottom: 8px; font-size: 14px; line-height: 1.5; word-break: break-word; }
+.chat-msg .who { font-weight: bold; color: #0d5c36; }
+.chat-msg.me .who { color: #b26a00; }
+.chat-msg .tm { color: #999; font-size: 11px; margin-left: 6px; }
+.chat-empty { color: #999; text-align: center; font-size: 13px; padding: 16px 0; }
+.quick-phrases { display: flex; gap: 6px; padding: 6px 12px; border-top: 1px solid #eee; flex-wrap: wrap; }
+.quick-phrases button {
+  border: 1px solid #ddd; background: #f6f6f6; border-radius: 16px;
+  padding: 7px 12px; font-size: 14px; cursor: pointer; min-height: 36px;
+}
+.chat-input-row { display: flex; gap: 8px; padding: 8px 12px 12px; }
+.chat-input-row input { flex: 1; margin: 0; border: 1px solid #ddd; background: #f9f9f9; font-size: 15px; }
+.chat-input-row .btn { min-width: 64px; }
+
+/* 弹窗 */
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-box { background: #fff; color: #222; border-radius: 12px; padding: 20px; width: 100%; max-width: 480px; max-height: 88vh; overflow-y: auto; }
+.modal-box h2 { margin-top: 0; text-align: center; }
+.modal-box.rules h3 { margin: 14px 0 4px; font-size: 16px; }
+.modal-box.rules p { margin: 4px 0; font-size: 14px; line-height: 1.6; }
+#resultBody table { width: 100%; border-collapse: collapse; font-size: 15px; }
+#resultBody td, #resultBody th { padding: 6px 4px; text-align: center; border-bottom: 1px solid #eee; }
+#resultBody .win { color: #0a7a3d; font-weight: bold; }
+#resultBody .lose { color: #c0392b; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 130px; transform: translateX(-50%);
+  background: rgba(0,0,0,.85); color: #fff; padding: 10px 18px; border-radius: 8px;
+  font-size: 15px; z-index: 60; max-width: 90vw; text-align: center;
+}
+.conn {
+  position: fixed; top: 0; left: 0; right: 0; background: #c0392b; color: #fff;
+  text-align: center; padding: 8px; font-size: 14px; z-index: 70;
+}
+
+/* ---- 断点 ---- */
+/* 窄屏手机（约 360px） */
+@media (max-width: 359px) {
+  :root { --card-w: 33px; }
+  .screen { padding: 8px; }
+  .opp { padding: 5px 6px; min-height: 54px; }
+  #actions .btn { font-size: 16px; }
+}
+/* 常规手机（390px 起） */
+@media (min-width: 390px) {
+  :root { --card-w: clamp(38px, 10.5vw, 46px); }
+}
+/* 平板（768px 起） */
+@media (min-width: 768px) {
+  :root { --card-w: 52px; }
+  .screen { padding: 20px; }
+  #table.screen { max-width: 860px; }
+  .opp { min-height: 72px; padding: 10px 12px; }
+  #center { min-height: 100px; }
+  .chat-panel {
+    left: auto; right: 16px; bottom: 16px; width: 340px;
+    border-radius: 12px; max-height: 60vh;
+  }
+}
+/* 桌面（1024px 起） */
+@media (min-width: 1024px) {
+  :root { --card-w: 54px; }
+  #table.screen { max-width: 920px; }
+  .hand { min-height: 110px; }
+}
+/* 横屏矮屏：压紧布局 */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root { --card-w: clamp(30px, 7vh, 40px); }
+  .opp { min-height: 46px; padding: 4px 8px; }
+  #center { min-height: 56px; }
+  .hand { min-height: 64px; padding-top: 6px; }
+  h1 { margin: 8px 0 2px; }
+}
