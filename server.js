@@ -84,6 +84,7 @@ function stateFor(room, seat) {
     ready: p ? p.ready : false,
     connected: p ? p.connected : false,
     voice: p ? !!p.voiceOn : false,
+    mic: p ? !!p.micOn : false,
     score: g.scores[i],
     cards: g.phase === 'playing' ? g.hands[i].length : 0,
     out: g.isOut(i),
@@ -274,7 +275,7 @@ function handleMessage(ws, msg) {
         const name = validName(data.name);
         if (!name) { sendError(ws, '昵称 2–8 个字'); return; }
         const room = createRoom();
-        room.players[0] = { name: name, ws: ws, connected: true, ready: false, voiceOn: false };
+        room.players[0] = { name: name, ws: ws, connected: true, ready: false, voiceOn: false, micOn: true };
         ws._room = room; ws._seat = 0;
         log(room, `座位 0 创建房间`);
         ws.send(JSON.stringify(stateFor(room, 0)));
@@ -304,7 +305,7 @@ function handleMessage(ws, msg) {
         const seat = room.players.findIndex((p) => !p);
         if (seat === -1) { sendError(ws, '房间已满'); return; }
         if (room.game.phase !== 'lobby') { sendError(ws, '游戏进行中，不能加入'); return; }
-        room.players[seat] = { name: name, ws: ws, connected: true, ready: false, voiceOn: false };
+        room.players[seat] = { name: name, ws: ws, connected: true, ready: false, voiceOn: false, micOn: true };
         ws._room = room; ws._seat = seat;
         log(room, `座位 ${seat} 加入`);
         broadcast(room);
@@ -328,7 +329,8 @@ function handleMessage(ws, msg) {
         const p = room.players[ws._seat];
         if (!p) return;
         p.voiceOn = data.on === true;
-        broadcastMsg(room, { t: 'voice-state', seat: ws._seat, on: p.voiceOn });
+        if (typeof data.mic === 'boolean') p.micOn = data.mic;
+        broadcastMsg(room, { t: 'voice-state', seat: ws._seat, on: p.voiceOn, mic: p.micOn });
         broadcast(room);
         break;
       }

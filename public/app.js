@@ -19,9 +19,11 @@
   var chatOpen = false;
   var unreadChat = 0;
 
-  // 语音：voiceMode: off | on | muted（自己静音，不断连接）
+  // 语音：voiceStarted 会话是否已开启；micOn 我能不能说（麦）；speakerOn 我能不能听到别人（扬声器）
   var voice = null;
-  var voiceMode = 'off';
+  var voiceStarted = false;
+  var micOn = true;
+  var speakerOn = true;
   var remoteMuted = new Set(); // 不想听的座位
   var audioEls = {}; // seat -> <audio>
   var voiceStates = {}; // seat -> 'connecting' | 'connected' | 'disconnected' | 'failed'
@@ -174,7 +176,7 @@
           $('audioBox').appendChild(audio);
         }
         audio.srcObject = stream;
-        audio.muted = remoteMuted.has(seat);
+        audio.muted = remoteMuted.has(seat) || !speakerOn;
         unlockAudio();
       },
       onConnectionState: function (seat, st) {
@@ -196,25 +198,26 @@
   }
 
   function updateVoiceButtons() {
-    var label = voiceMode === 'off' ? '🎤 语音：关' : voiceMode === 'on' ? '🎤 语音：开' : '🎤 语音：开（已静音）';
-    var short = voiceMode === 'off' ? '🎤 关' : '🎤 开';
+    // 语音按钮 = 我能不能说；静音按钮 = 我能不能听到别人
+    var label = micOn && voiceStarted ? '🎤 语音：开' : '🎤 语音：关';
+    var short = micOn && voiceStarted ? '🎤 开' : '🎤 关';
     $('voiceBtn1').textContent = label;
     $('voiceBtn2').textContent = short;
-    $('voiceBtn1').classList.toggle('on', voiceMode !== 'off');
-    $('voiceBtn1').classList.toggle('muted', voiceMode === 'muted');
-    $('voiceBtn2').classList.toggle('on', voiceMode !== 'off');
-    $('voiceBtn2').classList.toggle('muted', voiceMode === 'muted');
-    // 静音按钮只在语音开启时显示
-    var muteHidden = voiceMode === 'off';
+    $('voiceBtn1').classList.toggle('on', micOn && voiceStarted);
+    $('voiceBtn2').classList.toggle('on', micOn && voiceStarted);
+    // 静音按钮只在语音会话开启时显示
+    var muteHidden = !voiceStarted;
     $('muteBtn1').classList.toggle('hidden', muteHidden);
     $('muteBtn2').classList.toggle('hidden', muteHidden);
-    $('muteBtn1').textContent = voiceMode === 'muted' ? '🎙️ 取消静音' : '🔇 静音';
-    $('muteBtn2').textContent = voiceMode === 'muted' ? '🎙️' : '🔇';
+    $('muteBtn1').textContent = speakerOn ? '🔊 能听到' : '🔇 静音';
+    $('muteBtn2').textContent = speakerOn ? '🔊' : '🔇';
+    $('muteBtn1').classList.toggle('muted', !speakerOn);
+    $('muteBtn2').classList.toggle('muted', !speakerOn);
   }
 
-  // 语音开关：关 ↔ 开（点一下开，再点一下彻底关）；静音是单独的按钮
+  // 语音按钮：控制我能不能说。第一次点开启会话（要麦克风权限），之后只开关自己的麦，不断连接
   function toggleVoice() {
-    if (voiceMode === 'off') {
+    if (!voiceStarted) {
       if (!window.VoiceChat || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         toast('当前浏览器不支持语音');
         return;
@@ -222,10 +225,12 @@
       var v = ensureVoice();
       v.mySeat = state.mySeat;
       v.start().then(function () {
-        voiceMode = 'on';
+        voiceStarted = true;
+        micOn = true;
+        speakerOn = true;
         updateVoiceButtons();
         unlockAudio(); // 手势上下文里把已有远端音频播起来（手机自动播放限制）
-        send({ t: 'voice', on: true });
+        send({ t: 'voice', on: true, mic: true });
         // 向已开语音且座位号比我大的玩家发起连接（小号发起，避免冲突）
         state.seats.forEach(function (p, i) {
           if (p.voice && i !== state.mySeat && state.mySeat < i) {
@@ -238,26 +243,28 @@
         toast('麦克风权限被拒绝，语音未开启');
       });
     } else {
-      turnVoiceOff();
+      micOn = !micOn;
+      voice.setMuted(!micOn);
+      send({ t: 'voice', on: true, mic: micOn });
+      updateVoiceButtons();
     }
   }
 
-  // 静音：只关自己的麦（别人听不到你，你还能听到别人），不断连接；再点取消静音
-  function toggleMute() {
-    if (voiceMode === 'off' || !voice) return;
-    if (voiceMode === 'on') {
-      voice.setMuted(true);
-      voiceMode = 'muted';
-    } else {
-      voice.setMuted(false);
-      voiceMode = 'on';
-    }
+  // 静音按钮：控制我能不能听到别人。只关本地扬声器，不影响麦，别人照样能听到我
+  function toggleSpeaker() {
+    if (!voiceStarted) { toast('先点语音开启，再用静音'); return; }
+    speakerOn = !speakerOn;
+    Object.keys(audioEls).forEach(function (seat) {
+      audioEls[seat].muted = remoteMuted.has(+seat) || !speakerOn;
+    });
     updateVoiceButtons();
   }
 
   function turnVoiceOff() {
     if (voice) voice.stop();
-    voiceMode = 'off';
+    voiceStarted = false;
+    micOn = true;
+    speakerOn = true;
     voiceStates = {};
     needVoiceHeal = false;
     updateVoiceButtons();
@@ -267,14 +274,17 @@
   function onVoiceState(msg) {
     if (!state) return;
     // 更新本地状态里的语音标记（完整 state 随后也会到）
-    if (state.seats[msg.seat]) state.seats[msg.seat].voice = msg.on;
+    if (state.seats[msg.seat]) {
+      state.seats[msg.seat].voice = msg.on;
+      if (typeof msg.mic === 'boolean') state.seats[msg.seat].mic = msg.mic;
+    }
     if (msg.seat === state.mySeat) return;
     if (!msg.on) {
       if (voice) voice.closePeer(msg.seat);
       return;
     }
     // 对方开了语音：我是小号且我也开着 → 我发起
-    if (voiceMode !== 'off' && voice && state.mySeat < msg.seat) {
+    if (voiceStarted && voice && state.mySeat < msg.seat) {
       voiceStates[msg.seat] = 'connecting';
       voice.createOffer(msg.seat).catch(function () {});
     }
@@ -284,7 +294,7 @@
 
   // 语音连接状态点：🟡连接中 🟢已连接 🔴失败（自己或对方没开语音时不显示）
   function voiceDot(seat) {
-    if (voiceMode === 'off' || seat === state.mySeat) return '';
+    if (!voiceStarted || seat === state.mySeat) return '';
     var st = voiceStates[seat];
     if (!st) return '';
     if (st === 'connected') return ' <span class="vdot ok" title="语音已连接">🟢</span>';
@@ -312,11 +322,11 @@
 
     // 断线重连后语音自愈：服务器端已把我的语音标为关闭，但本地还开着 → 重新宣告并重建通话
     var mySeatState = s.seats[s.mySeat];
-    if (needVoiceHeal && voiceMode !== 'off' && voice && mySeatState && !mySeatState.voice) {
+    if (needVoiceHeal && voiceStarted && voice && mySeatState && !mySeatState.voice) {
       needVoiceHeal = false;
       voice.closeAll();
       voiceStates = {};
-      send({ t: 'voice', on: true });
+      send({ t: 'voice', on: true, mic: micOn });
       s.seats.forEach(function (p, i) {
         if (p.voice && i !== s.mySeat && s.mySeat < i) {
           voiceStates[i] = 'connecting';
@@ -344,7 +354,7 @@
       var btn = '';
       if (!p.name && s.mySeat !== -1) btn = '<button class="btn small" data-seat="' + i + '">坐这儿</button>';
       d.innerHTML = '<div class="pos">' + seatPosLabel(i) + '</div>' +
-        '<div class="name">' + (p.name ? esc(p.name) : '空座位') + (p.voice ? ' <span class="voice-ico">🎤</span>' + voiceDot(i) : '') + '</div>' +
+        '<div class="name">' + (p.name ? esc(p.name) : '空座位') + (p.voice ? ' <span class="voice-ico">' + (p.mic === false ? '🔇' : '🎤') + '</span>' + voiceDot(i) : '') + '</div>' +
         '<div class="st' + (p.ready ? ' ready' : '') + '">' + (p.name ? (p.ready ? '✓ 已准备' : (p.connected ? '未准备' : '断线中…')) : '') + '</div>' + btn;
       seatsEl.appendChild(d);
     });
@@ -382,8 +392,8 @@
     // 语音标记 + 不听此人按钮（仅双方都开语音时有效）
     var voiceHtml = '';
     if (p.voice) {
-      voiceHtml = ' <span class="voice-ico">🎤</span>' + voiceDot(seat);
-      if (voiceMode !== 'off') {
+      voiceHtml = ' <span class="voice-ico">' + (p.mic === false ? '🔇' : '🎤') + '</span>' + voiceDot(seat);
+      if (voiceStarted) {
         var muted = remoteMuted.has(seat);
         voiceHtml += '<button class="mute-btn' + (muted ? ' off' : '') + '" data-mute="' + seat + '">' + (muted ? '🔇' : '🔊') + '</button>';
       }
@@ -410,7 +420,7 @@
         if (remoteMuted.has(st)) remoteMuted.delete(st);
         else remoteMuted.add(st);
         var audio = audioEls[st];
-        if (audio) audio.muted = remoteMuted.has(st);
+        if (audio) audio.muted = remoteMuted.has(st) || !speakerOn;
         renderTable(state);
       };
     });
@@ -606,7 +616,7 @@
     document.body.removeChild(ta);
   }
   function leaveRoom() {
-    if (voiceMode !== 'off') turnVoiceOff();
+    if (voiceStarted) turnVoiceOff();
     intentionalClose = true;
     send({ t: 'leave' });
     try { sessionStorage.removeItem('sk-session'); } catch (e) {}
@@ -635,8 +645,8 @@
   // 语音
   $('voiceBtn1').onclick = toggleVoice;
   $('voiceBtn2').onclick = toggleVoice;
-  $('muteBtn1').onclick = toggleMute;
-  $('muteBtn2').onclick = toggleMute;
+  $('muteBtn1').onclick = toggleSpeaker;
+  $('muteBtn2').onclick = toggleSpeaker;
 
   $('playBtn').onclick = function () {
     if (!state || selected.size === 0) { toast('先选牌'); return; }
